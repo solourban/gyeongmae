@@ -14,12 +14,16 @@ async function launchBrowser(): Promise<Browser> {
   const isDev = process.env.NODE_ENV !== 'production';
 
   if (isDev) {
-    // 로컬 개발: 시스템 Chrome 사용 (가장 빠름)
-    return playwrightChromium.launch({
-      headless: true,
-    });
-  }
-
+    // Vercel 서버리스: @sparticuz/chromium 사용
+  return playwrightChromium.launch({
+    args: chromium.args,
+    // Vercel이 버린 브라우저를 인터넷에서 실시간으로 꽂아 넣습니다.
+    executablePath: await chromium.executablePath(
+      'https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar'
+    ),
+    headless: true,
+  });
+}
   // Vercel 서버리스: @sparticuz/chromium 사용
   return playwrightChromium.launch({
     args: chromium.args,
