@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { fetchCase } from '../../../lib/crawler';
 import { analyzeCase } from '../../../lib/analyzer';
 
-export const maxDuration = 60;
+// Vercel 무료서버의 10초 컷을 60초(최대치)로 늘려주는 마법의 주문
+export const maxDuration = 60; 
 
 export async function POST(req: Request) {
   try {
+//
     const { saYear, saSer, jiwonNm, region } = await req.json();
     
     if (!saSer || !jiwonNm) {
