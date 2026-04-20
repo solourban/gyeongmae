@@ -1,30 +1,61 @@
-import { NextResponse } from 'next/server';
-import { fetchCase } from '../../../lib/crawler';
-import { analyzeCase } from '../../../lib/analyzer';
+'use client';
+import { useState, useEffect } from 'react';
+import { analyzeCase } from '../lib/analyzer'; 
 
-// Vercel 무료서버의 10초 컷을 60초(최대치)로 늘려주는 마법의 주문
-export const maxDuration = 60; 
+const COURTS = ['서울중앙지방법원', '서울동부지방법원', '대전지방법원', '천안지원', '부산지방법원']; // 예시로 줄임
 
-export async function POST(req: Request) {
-  try {
-//
-    const { saYear, saSer, jiwonNm, region } = await req.json();
-    
-    if (!saSer || !jiwonNm) {
-      return NextResponse.json({ error: '사건번호와 법원명을 모두 입력해주세요.' }, { status: 400 });
+function formatMoney(n: number): string {
+  if (!n) return '-';
+  const 억 = Math.floor(n / 100_000_000);
+  const 만 = Math.floor((n % 100_000_000) / 10_000);
+  return `${억 ? 억 + '억 ' : ''}${만.toLocaleString('ko-KR')}만 원`;
+}
+
+export default function Home() {
+  const [report, setReport] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('auto') === 'true') {
+      setLoading(true);
+      try {
+        const rawData = JSON.parse(decodeURIComponent(params.get('data') || ''));
+        setReport(analyzeCase(rawData, 'other'));
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch (e) { console.error("데이터 로드 실패"); }
+      setLoading(false);
     }
+  }, []);
 
-    // 1. 대법원 사이트 크롤링 실행
-    const rawData = await fetchCase(saYear, saSer, jiwonNm);
-    if (rawData.status === 'error') {
-      return NextResponse.json({ error: rawData.error }, { status: 500 });
-    }
+  return (
+    <main>
+      <header className="site-header"><div className="container nav-row"><h1>경매<span>AI</span></h1></div></header>
+      <section className="hero">
+        <div className="container">
+          <h2 className="hero-title">사건번호만 입력하면 <em>권리분석</em> 끝</h2>
+          <p>대법원 사이트에서 [추출] 버튼을 누르면 1초 만에 분석됩니다.</p>
+        </div>
+      </section>
+      <section className="results-section container">
+        {loading && <div className="loading-card"><div className="spinner"></div><p>분석 중...</p></div>}
+        {report && <ReportView report={report} />}
+      </section>
+    </main>
+  );
+}
 
-    // 2. 긁어온 데이터를 바탕으로 권리분석 실행
-    const report = analyzeCase(rawData, region || 'other');
-    
-    return NextResponse.json({ report });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || '분석 중 오류가 발생했습니다.' }, { status: 500 });
-  }
+function ReportView({ report }: { report: any }) {
+  return (
+    <div className="report">
+      <div className={`verdict ${report.risk.level}`}>
+        <h3>{report.basic['소재지'] || "물건 정보"}</h3>
+        <p>인수금액: {formatMoney(report.inherited.total)}</p>
+      </div>
+      <div className="subcard">
+        <h4>📜 권리 분석</h4>
+        <pre style={{ fontSize: '12px' }}>{JSON.stringify(report.rights, null, 2)}</pre>
+      </div>
+    </div>
+  );
 }
