@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+// ⚠️ 주의: 반드시 이전에 만든 lib/analyzer.ts가 있어야 합니다.
+import { analyzeCase } from '../lib/analyzer'; 
 
 const COURTS = [
   '서울중앙지방법원', '서울동부지방법원', '서울서부지방법원',
@@ -26,11 +28,35 @@ function formatMoney(n: number): string {
 export default function Home() {
   const [saYear, setSaYear] = useState('2024');
   const [saSer, setSaSer] = useState('');
-  const [jiwonNm, setJiwonNm] = useState('대전지방법원');
+  const [jiwonNm, setJiwonNm] = useState('천안지원');
   const [region, setRegion] = useState('other');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<any>(null);
+
+  // 🛰️ [추가된 기능] 대법원 사이트에서 쏜 데이터를 받아내는 안테나
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const auto = params.get('auto');
+    const rawDataStr = params.get('data');
+
+    if (auto === 'true' && rawDataStr) {
+      setLoading(true);
+      try {
+        const rawData = JSON.parse(decodeURIComponent(rawDataStr));
+        // 서버 에러 나는 API 대신, 내 브라우저에서 직접 분석 엔진(analyzer) 가동!
+        const analyzedReport = analyzeCase(rawData, region);
+        setReport(analyzedReport);
+        
+        // 주소창에 지저분한 데이터 파라미터 삭제 (깔끔하게 주소 정리)
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch (e) {
+        setError('데이터를 읽어오는 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, [region]);
 
   async function handleAnalyze() {
     if (!saSer.trim()) {
@@ -42,6 +68,7 @@ export default function Home() {
     setReport(null);
 
     try {
+      // 기존 API 방식도 일단 남겨둡니다 (나중에 서버 에러 고쳐지면 쓰기 위해)
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -81,8 +108,8 @@ export default function Home() {
             <em>경매 물건 권리분석</em> 끝
           </h2>
           <p className="hero-sub">
-            대법원 법원경매정보에서 자동으로 데이터를 가져와<br />
-            말소기준권리·인수소멸·대항력·배당을 분석합니다.
+            대법원 법원경매정보에서 [데이터 추출] 버튼을 누르면<br />
+            이곳에서 즉시 말소기준권리·인수소멸·대항력을 분석합니다.
           </p>
 
           <div className="search-box">
@@ -119,7 +146,7 @@ export default function Home() {
               </select>
             </div>
             <p className="search-hint">
-              대법원 사이트에서 실시간으로 데이터를 가져오므로 10~30초 정도 걸립니다.
+              대법원에서 즐겨찾기 버튼을 누르면 1초 만에 분석 결과가 뜹니다.
             </p>
           </div>
         </div>
@@ -129,8 +156,7 @@ export default function Home() {
         {loading && (
           <div className="loading-card">
             <div className="spinner"></div>
-            <p>대법원 경매정보에서 데이터를 가져오는 중입니다...</p>
-            <p className="muted">Playwright로 브라우저 세션을 열고 파싱합니다. 30초 정도 소요됩니다.</p>
+            <p>권리분석 엔진 가동 중...</p>
           </div>
         )}
 
@@ -138,7 +164,6 @@ export default function Home() {
           <div className="error-card">
             <h3>❌ 분석 실패</h3>
             <p>{error}</p>
-            <p className="muted">사건번호·법원명이 정확한지 확인하세요. 대법원 사이트가 점검 중이면 잠시 후 다시 시도하세요.</p>
           </div>
         )}
 
@@ -147,12 +172,13 @@ export default function Home() {
 
       <footer className="site-footer">
         <p>본 도구는 학습·참고용이며 법률 자문을 대체하지 않습니다.</p>
-        <p className="muted">분석 로직은 주택임대차보호법·민사집행법 일반원칙에 기반합니다. 실제 입찰 전 등기부등본·매각물건명세서 원본을 확인하세요.</p>
+        <p className="muted">실제 입찰 전 등기부등본·매각물건명세서 원본을 확인하세요.</p>
       </footer>
     </main>
   );
 }
 
+// ── 결과 화면 컴포넌트 (디자인 유지) ──
 function ReportView({ report }: { report: any }) {
   const verdictLabel = { ok: '양호', warn: '주의', danger: '위험' }[report.risk.level as 'ok' | 'warn' | 'danger'];
   const verdictDesc = {
@@ -166,7 +192,6 @@ function ReportView({ report }: { report: any }) {
 
   return (
     <div className="report">
-      {/* 종합 판정 */}
       <div className={`verdict ${report.risk.level}`}>
         <span className="verdict-badge">
           {report.risk.level === 'ok' ? '✓' : '⚠'} 종합 · {verdictLabel}
@@ -182,31 +207,18 @@ function ReportView({ report }: { report: any }) {
       </div>
 
       {/* 기본정보 */}
-      {Object.keys(report.basic).length > 0 && (
-        <div className="subcard">
-          <h4>📋 물건 기본정보</h4>
-          <table className="basic-table">
-            <tbody>
-              {Object.entries(report.basic).map(([k, v]) => (
-                <tr key={k}><th>{k}</th><td>{v as string}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="subcard">
+        <h4>📋 물건 기본정보</h4>
+        <table className="basic-table">
+          <tbody>
+            {Object.entries(report.basic).map(([k, v]) => (
+              <tr key={k}><th>{k}</th><td>{v as string}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {/* 말소기준 */}
-      {report.malso && (
-        <div className="subcard">
-          <h4>⚖ 말소기준권리</h4>
-          <p><b>{report.malso.type}</b> · {report.malso.holder} · 접수 {report.malso.date} · {formatMoney(report.malso.amount)}</p>
-          <div className="note">
-            이 날짜(<b>{report.malso.date}</b>) 이후에 설정된 권리는 매각으로 소멸됩니다.
-          </div>
-        </div>
-      )}
-
-      {/* 권리 분석 */}
+      {/* 권리 분석 테이블 */}
       <div className="subcard">
         <h4>📜 권리 분석 ({report.rights.length}건)</h4>
         <table className="rights-table">
@@ -254,52 +266,10 @@ function ReportView({ report }: { report: any }) {
         </div>
       )}
 
-      {/* 위험 플래그 */}
-      <div className="subcard">
-        <h4>🚨 위험 요소</h4>
-        {report.risk.flags.map((f: any, i: number) => (
-          <div key={i} className={`note ${f.sev === 'danger' ? 'danger-note' : f.sev === 'warn' ? 'warn-note' : ''}`}>
-            {f.sev === 'danger' ? '🚨' : f.sev === 'warn' ? '⚠️' : '✓'} {f.msg}
-          </div>
-        ))}
-      </div>
-
-      {/* 배당 시뮬 */}
-      <div className="subcard">
-        <h4>💰 배당 시뮬레이션 (최저가 기준)</h4>
-        <table className="rights-table">
-          <thead><tr><th>순위</th><th>항목</th><th style={{ textAlign: 'right' }}>배당액</th></tr></thead>
-          <tbody>
-            {report.baedang.allocations.map((a: any, i: number) => (
-              <tr key={i}><td>{a.order}순위</td><td>{a.label}</td><td style={{ textAlign: 'right' }}>{formatMoney(a.amount)}</td></tr>
-            ))}
-            {report.baedang.surplus > 0 && (
-              <tr><td></td><td><b>잉여</b></td><td style={{ textAlign: 'right' }}><b>{formatMoney(report.baedang.surplus)}</b></td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 예상 입찰가 */}
-      {report.bidRec && (
-        <div className="bid-rec">
-          <h4>🤖 AI 예상 입찰가 구간</h4>
-          <div className="range">
-            {formatMoney(report.bidRec.lower)} <span className="sep">—</span> {formatMoney(report.bidRec.upper)}
-          </div>
-          <p>기준 시세 {formatMoney(report.bidRec.base)} · 인수금액 {formatMoney(report.inherited.total)} · 부대비용 5.6% 반영</p>
-        </div>
-      )}
-
-      {/* 해설 */}
       <div className="subcard">
         <h4>💡 쉬운 말 해설</h4>
-        <div dangerouslySetInnerHTML={{ __html: report.explanation }} />
+        <div>{report.explanation}</div>
       </div>
-
-      <p className="muted">
-        원본: <a href={report.url} target="_blank" rel="noreferrer">대법원 경매정보 보기</a>
-      </p>
     </div>
   );
 }
