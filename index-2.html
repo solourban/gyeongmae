@@ -1,0 +1,679 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>도시계획기사 필답형 CBT</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css" rel="stylesheet">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TW818Y7G4E"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-TW818Y7G4E');
+</script>
+</head><body style="margin:0;background:#F4F4F4"><div id="root"></div>
+<script src="config.js"></script>
+<script src="questions.js"></script>
+<script type="text/babel">
+// ═══════════════════════════════════════
+// 도시계획기사 실기 CBT — 설정
+// 계좌번호, 연락처 등 여기서 수정
+// ═══════════════════════════════════════
+
+
+const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+// ═══════════════════════════════════════
+// 색상 팔레트 · 타입 · 단원 정의
+// ═══════════════════════════════════════
+const P={blue:"#3182F6",ok:"#00C48C",err:"#F04452",warn:"#FF9F43",t1:"#191F28",t2:"#4E5968",t3:"#8B95A1",t4:"#B0B8C1",bg:"#F4F4F4",card:"#FFFFFF",dim:"#F2F4F6",line:"#E5E8EB"};
+const ET=3600;
+const TYPES=["short_answer","keyword_essay","calculation"];
+const TL={short_answer:"단답형",keyword_essay:"서술형",calculation:"계산형"};
+const TC={short_answer:"#059669",keyword_essay:"#2563EB",calculation:"#EA580C"};
+const CHAPTERS=[
+  {id:"Ⅰ",name:"국토계획체계",color:"#3182F6",kw:["국토종합","국토기본","도종합","시군종합","광역도시","초광역","국토정책위","국토교통부","지속가능"]},
+  {id:"Ⅱ",name:"용도지역·지구·구역",color:"#7C3AED",kw:["용도지역","용도지구","주거지역","상업지역","공업지역","녹지지역","관리지역","농림","자연환경보전","전용주거","일반주거","준주거","개발제한","시가화조정","수산자원","도시자연공원","개발밀도관리","기반시설부담"]},
+  {id:"Ⅲ",name:"도시계획시설·기반",color:"#EA580C",kw:["기반시설","도로","광장","공원","녹지","상하수도","학교","주차장","도시계획시설","공공공지","보행자","곡선반경","도로율","광대로","배치간격","일몰제"]},
+  {id:"Ⅳ",name:"지구단위계획",color:"#0891B2",kw:["지구단위","건축지정선","건축한계선","벽면","표시기호","합벽","공공보행","특별계획","복합용도","입체복합","도시혁신","화이트존","공간재구조화"]},
+  {id:"Ⅴ",name:"개발사업·정비",color:"#DC2626",kw:["도시개발","정비사업","재개발","재건축","재정비","촉진지구","소규모","자율주택","가로주택","도시재생","마을기업","혁신지구","노후계획","수용","환지"]},
+  {id:"Ⅵ",name:"건폐율·용적률·계산",color:"#D97706",kw:["건폐율","용적률","경사도","축척","계산","층수","면적","NPV","순현재가치","인구추정","BT"]},
+  {id:"Ⅶ",name:"수도권·성장관리",color:"#059669",kw:["수도권","과밀억제","성장관리","자연보전","과밀부담","권역"]},
+  {id:"Ⅷ",name:"주택·산업·기타법령",color:"#6D28D9",kw:["주택법","국민주택","주택조합","장수명","건강친화","산업단지","스마트그린","농공","택지","스마트시티","ESSD","개발권양도","TDR","TOD","뉴어바니즘","도시형생활"]}
+];
+
+
+
+
+
+function getChapter(q){
+  const s=JSON.stringify(q.tags||[]).toLowerCase()+" "+JSON.stringify(q.keywords||{}).toLowerCase()+" "+(q.question||"").toLowerCase();
+  for(const ch of CHAPTERS){if(ch.kw.some(k=>s.includes(k.toLowerCase())))return ch;}
+  return CHAPTERS[0];
+}
+
+const LS="ucbt_h",SS="ucbt_s",BK="ucbt_bk";
+function ld(k){try{return JSON.parse(localStorage.getItem(k))||[];}catch{return[];}}
+function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v.slice(-500)));}catch{}}
+function track(event,params){try{if(window.gtag)window.gtag("event",event,params||{});}catch(e){}}
+function ldSet(k){try{return JSON.parse(localStorage.getItem(k))||[];}catch{return[];}}
+function svSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+function ldPm(){try{const v=JSON.parse(localStorage.getItem("ucbt_pm"));if(!v)return false;return v.code==="ok"&&v.ts>Date.now()-2678400000;}catch{return false;}}
+async function hashCode(s){const d=new TextEncoder().encode(s.toUpperCase());const h=await crypto.subtle.digest("SHA-256",d);return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function svPm(code){const now=new Date();const monthCode=now.getFullYear().toString()+String(now.getMonth()+1).padStart(2,"0");const inputHash=await hashCode(code);const validHash=await hashCode(monthCode);if(inputHash===validHash||inputHash===CONFIG.masterHash){localStorage.setItem("ucbt_pm",JSON.stringify({code:"ok",ts:Date.now()}));return true;}return false;}
+function yrMap(){const m={};QUESTIONS.forEach(q=>{if(q.exam==="연습문제"||q.exam.startsWith("모의고사"))return;const y=q.exam.slice(0,5);if(!m[y])m[y]={};if(!m[y][q.exam])m[y][q.exam]=[];m[y][q.exam].push(q);});return m;}
+
+function grS(q,a){const c=a.trim().replace(/\s+/g,"").replace(/[()（）]/g,"").toLowerCase();if(!c)return{s:0,m:q.points,fb:[]};const r=q.keywords.required,mt=r.filter(k=>((kk=k.replace(/\s+/g,"").toLowerCase()),kk.length<=2?new RegExp("(?:^|[^0-9a-zA-Z가-힣])"+kk.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?:$|[^0-9a-zA-Z가-힣])").test(c)||c===kk:c.includes(kk))),ms=r.filter(k=>!((kk=k.replace(/\s+/g,"").toLowerCase()),kk.length<=2?new RegExp("(?:^|[^0-9a-zA-Z가-힣])"+kk.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?:$|[^0-9a-zA-Z가-힣])").test(c)||c===kk:c.includes(kk))),bn=(q.keywords.bonus||[]).filter(k=>((kk=k.replace(/\s+/g,"").toLowerCase()),kk.length<=2?new RegExp("(?:^|[^0-9a-zA-Z가-힣])"+kk.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?:$|[^0-9a-zA-Z가-힣])").test(c)||c===kk:c.includes(kk)));if(q.acceptedAnswers?.length)for(const ac of q.acceptedAnswers)if(ac.every(x=>c.includes(x.replace(/\s+/g,"").toLowerCase())))return{s:q.points,m:q.points,fb:["정답입니다!"]};const rt=r.length>0?mt.length/r.length:0,sc=Math.round(q.points*rt),fb=[];if(mt.length)fb.push("✓ "+mt.join(", "));if(ms.length)fb.push("✗ "+ms.join(", "));if(bn.length)fb.push("+ "+bn.join(", "));return{s:sc,m:q.points,fb};}
+function grE(q,a){const c=a.trim().replace(/\s+/g," ").toLowerCase();if(!c)return{s:0,m:q.points,fb:[]};const mt=q.keywords.required.filter(k=>c.includes(k.toLowerCase())),ms=q.keywords.required.filter(k=>!c.includes(k.toLowerCase())),bn=(q.keywords.bonus||[]).filter(k=>c.includes(k.toLowerCase()));let raw=q.points*(q.keywords.required.length>0?mt.length/q.keywords.required.length:0)*.7+bn.length*.5;raw=Math.max(0,Math.min(q.points,Math.round(raw)));const fb=[mt.length+"/"+q.keywords.required.length+" 키워드"];if(ms.length)fb.push("누락: "+ms.join(", "));return{s:raw,m:q.points,fb};}
+function grC(q,sa){const rs=q.steps.map((st,i)=>{const u=(sa[i]||"").trim().replace(/\s+/g,"").toLowerCase();if(!u)return{ok:false,lb:st.label,ans:st.answer};const c=st.answer.replace(/\s+/g,"").toLowerCase(),al=(st.alternates||[]).map(x=>x.replace(/\s+/g,"").toLowerCase());return{ok:u===c||al.includes(u),lb:st.label,ua:sa[i],ans:st.answer};});return{s:Math.round(rs.filter(r=>r.ok).length/q.steps.length*q.points),m:q.points,rs};}
+function grSubs(q,ans){const subs=q.subs,pp=q.points/subs.length;let tot=0;const rs=subs.map((sub,i)=>{const a=(ans[i]||"").trim().replace(/\s+/g,"").replace(/[()（）]/g,"").toLowerCase();if(!a)return{lb:sub.label,ok:false,score:0,max:Math.round(pp),ans:(sub.keywords||[]).join(", ")};const kws=sub.keywords||[],mt=kws.filter(k=>a.includes(k.replace(/\s+/g,"").toLowerCase())),rate=kws.length>0?mt.length/kws.length:0,sc=Math.round(pp*rate);tot+=sc;return{lb:sub.label,ok:rate>=0.8,score:sc,max:Math.round(pp),ans:kws.join(", ")};});return{s:Math.min(tot,q.points),m:q.points,rs,fb:rs.map(r=>(r.ok?"✓":"✗")+" "+r.lb)};}
+
+function App(){
+  const[pg,setPg]=useState("home"),[tab,setTab]=useState("test");
+  const[sq,setSq]=useState([]),[ix,setIx]=useState(0);
+  const[an,setAn]=useState({}),[ca,setCa]=useState({}),[gr,setGr]=useState({}),[se,setSe]=useState({});
+  const[tm,setTm]=useState(0),[rn,setRn]=useState(false);
+  const[mode,setMode]=useState("exam");
+  const[hs,setHs]=useState(()=>ld(LS)),[sns,setSns]=useState(()=>ld(SS));
+  const[bks,setBks]=useState(()=>ldSet(BK));
+  const[isPro,setIsPro]=useState(()=>ldPm());
+  const[showLock,setShowLock]=useState(false);
+  const[lockMsg,setLockMsg]=useState("");
+  const[lockInput,setLockInput]=useState("");
+  const[lockErr,setLockErr]=useState(false);
+  const askPro=(msg)=>{if(isPro)return true;track("lock_shown",{target:msg});setLockMsg(msg);setLockInput("");setLockErr(false);setShowLock(true);return false;};
+  const confirmPro=async()=>{if(await svPm(lockInput)){track("pro_unlock_success");setIsPro(true);setShowLock(false);}else{track("pro_unlock_fail");setLockErr(true);}};
+  const[sn,setSn]=useState(""),[oyr,setOyr]=useState(null),[vsn,setVsn]=useState(null);
+  const[srch,setSrch]=useState(""),[srchRes,setSrchRes]=useState(null);
+  const[_ww,_setWw]=useState(typeof window!=="undefined"?window.innerWidth:720);
+  useEffect(()=>{const _h=()=>_setWw(window.innerWidth);window.addEventListener("resize",_h);return()=>window.removeEventListener("resize",_h);},[]);
+  const isPC=_ww>=1024;
+  const rf=useRef(null),daR=useRef(null),stR=useRef(null);
+  const isExam=mode==="exam",isDrill=mode==="drill";
+  const[oxQs,setOxQs]=useState([]),[oxIx,setOxIx]=useState(0),[oxAns,setOxAns]=useState({}),[oxDone,setOxDone]=useState(false);
+  const[fcMode,setFcMode]=useState(false),[fcFlip,setFcFlip]=useState(false),[fcIdx,setFcIdx]=useState(0),[fcPool,setFcPool]=useState([]);
+
+  const genOx=useCallback(()=>{
+    const pool=QUESTIONS.filter(q=>q.keywords?.required?.length>=2&&q.explanation?.length>15);
+    const shuffled=[...pool].sort(()=>Math.random()-.5).slice(0,20);
+    const oxList=[];
+    shuffled.forEach(q=>{
+      const kws=q.keywords.required;
+      const wrongPool=QUESTIONS.filter(x=>x.id!==q.id&&x.keywords?.required?.length>=1);
+      if(kws.length>=2)oxList.push({id:"ox_o_"+q.id,statement:q.explanation.split("\n")[0],answer:true,source:q.exam,explanation:q.explanation});
+      if(wrongPool.length>0&&kws.length>=1){const wrong=wrongPool[Math.floor(Math.random()*wrongPool.length)],wrongKw=wrong.keywords.required[0],orig=kws[0],fake=q.explanation.split("\n")[0].replace(orig,wrongKw);if(fake!==q.explanation.split("\n")[0])oxList.push({id:"ox_x_"+q.id,statement:fake,answer:false,source:q.exam,explanation:"올바른 답: "+orig+"\n\n"+q.explanation});}
+    });
+    setOxQs([...oxList].sort(()=>Math.random()-.5).slice(0,20));setOxIx(0);setOxAns({});setOxDone(false);setPg("ox");
+  },[]);
+
+  useEffect(()=>{if(rn){rf.current=setInterval(()=>{setTm(t=>{if(isExam){const n=t-1;if(n<=0){clearInterval(rf.current);setRn(false);if(daR.current)daR.current();return 0;}return n;}return t+1;});},1000);}else clearInterval(rf.current);return()=>clearInterval(rf.current);},[rn,isExam]);
+  useEffect(()=>{sv(LS,hs);},[hs]);
+  useEffect(()=>{sv(SS,sns);},[sns]);
+  useEffect(()=>{svSet(BK,bks);},[bks]);
+
+  const ym=useMemo(()=>yrMap(),[]),yrs=Object.keys(ym).sort().reverse(),cq=sq[ix];
+  const CATS=[...new Set(QUESTIONS.map(q=>q.category))].sort();
+  const go=useCallback((qs,m,nm)=>{if(!qs.length){alert("문제가 없습니다.");return;}track("start_quiz",{mode:m,name:nm,count:qs.length});if(!isPro&&qs.some(q=>{const y=parseInt(q.exam);return y>0&&y<CONFIG.freeExamFromYear;})){if(!askPro(nm||"과거 기출"))return;}setSq(qs);setIx(0);setAn({});setCa({});setGr({});setSe({});setMode(m);setTm(m==="exam"?ET:0);setRn(true);setSn(nm||"연습");stR.current=Date.now();setPg("solve");},[isPro]);
+
+  const goMock=useCallback((pool,nm)=>{track("mock_exam_click");
+    const shuffled=[...pool].filter(q=>q.exam!=="연습문제").sort(()=>Math.random()-.5);
+    const count=5+Math.floor(Math.random()*4);const picked=[];let totalPts=0;
+    for(const q of shuffled){if(picked.length>=count)break;picked.push(q);totalPts+=q.points;}
+    const ratio=40/totalPts;const adjusted=picked.map(q=>({...q,points:Math.max(2,Math.round(q.points*ratio))}));
+    let sum=adjusted.reduce((a,q)=>a+q.points,0);if(sum!==40&&adjusted.length>0)adjusted[0].points+=40-sum;
+    go(adjusted,"exam",nm||"랜덤 모의고사");
+  },[go]);
+
+  const goWeak=useCallback(()=>{
+    const catCount={};
+    hs.filter(h=>h.s<h.m).forEach(h=>{const q=QUESTIONS.find(x=>x.id===h.qId);if(q){catCount[q.category]=(catCount[q.category]||0)+1;(q.tags||[]).forEach(t=>{catCount[t]=(catCount[t]||0)+1;});}});
+    if(!Object.keys(catCount).length){alert("오답 기록이 없습니다.");return;}
+    const weakKeys=Object.entries(catCount).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]);
+    const pool=QUESTIONS.filter(q=>q.exam!=="연습문제"&&(weakKeys.includes(q.category)||(q.tags||[]).some(t=>weakKeys.includes(t))));
+    if(pool.length<3){alert("약점 데이터가 부족합니다.");return;}
+    goMock(pool,"약점 집중 모의고사");
+  },[hs,goMock]);
+
+  // 북마크 토글
+  const toggleBk=useCallback((qId)=>{setBks(p=>p.includes(qId)?p.filter(x=>x!==qId):[...p,qId]);},[]);
+
+  // 검색
+  const doSearch=useCallback((term)=>{
+    if(!term.trim()){setSrchRes(null);return;}
+    const t=term.toLowerCase();
+    const res=QUESTIONS.filter(q=>{
+      const s=(q.question||"").toLowerCase()+" "+JSON.stringify(q.tags||[]).toLowerCase()+" "+JSON.stringify(q.keywords||{}).toLowerCase()+" "+(q.explanation||"").toLowerCase();
+      return s.includes(t);
+    });
+    setSrchRes(res);
+  },[]);
+
+  // 플래시카드 시작
+  const startFlashcard=useCallback((pool)=>{
+    const shuffled=[...pool].sort(()=>Math.random()-.5).slice(0,20);
+    setFcPool(shuffled);setFcIdx(0);setFcFlip(false);setFcMode(true);setPg("flashcard");
+  },[]);
+
+  // 데일리 드릴: 오답 + 안 푼 문제 우선
+  const goDailyDrill=useCallback(()=>{
+    const solvedIds=new Set(hs.map(h=>h.qId));
+    const wrongIds=new Set(hs.filter(h=>h.s<h.m).map(h=>h.qId));
+    const wrong=QUESTIONS.filter(q=>wrongIds.has(q.id)).sort(()=>Math.random()-.5);
+    const unsolved=QUESTIONS.filter(q=>!solvedIds.has(q.id)).sort(()=>Math.random()-.5);
+    const solved=QUESTIONS.filter(q=>solvedIds.has(q.id)&&!wrongIds.has(q.id)).sort(()=>Math.random()-.5);
+    // 오답 5개 + 미풀이 3개 + 랜덤 2개 (부족하면 나머지로 채움)
+    const pick=[];
+    [wrong,unsolved,solved].forEach(pool=>{pool.forEach(q=>{if(pick.length<10&&!pick.find(p=>p.id===q.id))pick.push(q);});});
+    if(!pick.length){go([...QUESTIONS].sort(()=>Math.random()-.5).slice(0,10),"drill","데일리 드릴");return;}
+    go(pick.sort(()=>Math.random()-.5),"drill","데일리 드릴");
+  },[hs,go]);
+
+  const g1=q=>q.subs?grSubs(q,ca[q.id]||[]):q.type==="calculation"?grC(q,ca[q.id]||[]):q.type==="keyword_essay"?grE(q,an[q.id]||""):grS(q,an[q.id]||"");
+  const dg=()=>{const r=g1(cq);setGr(p=>({...p,[cq.id]:r}));setSe(p=>({...p,[cq.id]:true}));setHs(p=>[...p,{qId:cq.id,s:r.s,m:r.m,ts:Date.now()}]);};
+  const da=()=>{track("grade_all",{mode,count:sq.length});const nr={},wl=[];sq.forEach(q=>{const r=g1(q);nr[q.id]=r;if(r.s<r.m*.8)wl.push(q.id);setHs(p=>[...p,{qId:q.id,s:r.s,m:r.m,ts:Date.now()}]);});setGr(p=>({...p,...nr}));setRn(false);const el=isExam?ET-tm:(stR.current?Math.round((Date.now()-stR.current)/1000):0);const sc=sq.reduce((a,q)=>a+(nr[q.id]?.s||0),0),mx2=sq.reduce((a,q)=>a+q.points,0);if(isExam)setSns(p=>[...p,{ts:Date.now(),nm:sn,el,sc,mx:mx2,qc:sq.length,wi:wl}]);setPg("result");};
+  daR.current=da;
+  const rawTs=sq.reduce((a,q)=>a+(gr[q.id]?.s||0),0),rawMx=sq.reduce((a,q)=>a+q.points,0),el=isExam?ET-tm:tm;
+  const wIds=useMemo(()=>{
+    // 각 문제의 가장 최근 풀이 결과만 보고 오답 판정
+    const latest={};
+    hs.forEach(h=>{if(!latest[h.qId]||h.ts>latest[h.qId].ts)latest[h.qId]=h;});
+    return Object.values(latest).filter(h=>h.s<h.m).map(h=>h.qId);
+  },[hs]);
+  const wQs=QUESTIONS.filter(q=>wIds.includes(q.id));
+  const stats=useMemo(()=>{const bt={},bc={};TYPES.forEach(t=>{bt[t]={n:0,c:0};});hs.forEach(h=>{const q=QUESTIONS.find(x=>x.id===h.qId);if(!q)return;if(bt[q.type]){bt[q.type].n++;if(h.s>=h.m*.8)bt[q.type].c++;}if(!bc[q.category])bc[q.category]={n:0,c:0};bc[q.category].n++;if(h.s>=h.m*.8)bc[q.category].c++;});return{bt,bc};},[hs]);
+
+  // 단원별 진도 계산
+  const chapterStats=useMemo(()=>{
+    const solvedSet=new Set(hs.map(h=>h.qId));
+    const correctSet=new Set(hs.filter(h=>h.s>=h.m*.8).map(h=>h.qId));
+    return CHAPTERS.map(ch=>{
+      const qs=QUESTIONS.filter(q=>getChapter(q).id===ch.id);
+      const solved=qs.filter(q=>solvedSet.has(q.id)).length;
+      const correct=qs.filter(q=>correctSet.has(q.id)).length;
+      return{...ch,total:qs.length,solved,correct,rate:solved>0?Math.round(correct/solved*100):0};
+    });
+  },[hs]);
+
+  const fmtT=s=>{const m=Math.floor(s/60),sc=s%60;return String(m).padStart(2,"0")+":"+String(sc).padStart(2,"0");};
+  const fmtD=ts=>{const d=new Date(ts);return(d.getMonth()+1)+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+  const qTC=t=>TC[t]||P.blue;
+
+  const css=`@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css');*{box-sizing:border-box;margin:0;padding:0}body{background:${P.bg};-webkit-font-smoothing:antialiased}button{cursor:pointer;border:none;background:none;font-family:inherit}textarea:focus,input:focus{outline:none;border-color:${P.blue}!important;box-shadow:0 0 0 3px ${P.blue}20}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes flipIn{from{transform:rotateY(90deg);opacity:0}to{transform:rotateY(0);opacity:1}}::selection{background:${P.blue}25}`;
+  const CoupangAd=({location})=>{if(isPro)return null;
+    const isMobile=_ww<600;
+    const url=isMobile?"https://ads-partners.coupang.com/widgets.html?id=981622&template=carousel&trackingCode=AF3954486&subId=&width=320&height=100&tsource=":"https://ads-partners.coupang.com/widgets.html?id=981622&template=carousel&trackingCode=AF3954486&subId=&width=680&height=140&tsource=";
+    return<div style={{margin:"16px 0",textAlign:"center"}}>
+      <div style={{fontSize:10,color:P.t4,marginBottom:4}}>광고</div>
+      <iframe src={url} width={isMobile?320:680} height={isMobile?100:140} frameBorder="0" scrolling="no" referrerPolicy="unsafe-url" style={{border:"none",maxWidth:"100%"}}/>
+    </div>;
+  };
+  const W={fontFamily:"'Pretendard Variable','Pretendard',-apple-system,sans-serif",minHeight:"100vh",background:P.bg,color:P.t1,maxWidth:isPC?1080:720,margin:"0 auto",padding:"0 0 100px"};
+  const card={background:P.card,borderRadius:16,padding:"20px",marginBottom:12};
+  const cardFlat={background:P.card,borderRadius:16,padding:"16px 20px",marginBottom:8};
+  const btn=(bg,c,bd)=>({display:"block",width:"100%",padding:"16px",borderRadius:12,background:bg,color:c,fontSize:16,fontWeight:700,textAlign:"center",border:bd||"none",minHeight:52});
+  const bdg=c=>({display:"inline-flex",alignItems:"center",padding:"3px 10px",borderRadius:6,fontSize:12,fontWeight:700,color:c,background:c+"15",lineHeight:"20px"});
+  const inp={width:"100%",padding:"14px 16px",borderRadius:12,border:`1.5px solid ${P.line}`,fontSize:16,lineHeight:1.6,fontFamily:"inherit",background:P.card,transition:"border-color .2s, box-shadow .2s"};
+  const section={padding:"0 20px",minHeight:"calc(100vh - 200px)"};
+
+  // ═══ FLASHCARD ═══
+  if(pg==="flashcard"&&fcPool.length>0){
+    const fcQ=fcPool[fcIdx];const ch=getChapter(fcQ);
+    return<div style={W}><style>{css}</style>
+      <div style={{position:"sticky",top:0,zIndex:10,background:"rgba(244,244,244,.92)",backdropFilter:"blur(12px)",padding:"12px 20px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={()=>setPg("home")} style={{fontSize:22,color:P.t3,minWidth:44,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+          <span style={{fontSize:15,fontWeight:700,color:P.blue}}>플래시카드</span>
+          <span style={{flex:1}}/>
+          <span style={{fontSize:14,color:P.t3}}>{fcIdx+1}/{fcPool.length}</span>
+        </div>
+        <div style={{height:3,background:P.line,borderRadius:2,marginTop:10,overflow:"hidden"}}><div style={{width:`${(fcIdx+1)/fcPool.length*100}%`,height:"100%",background:P.blue,borderRadius:2,transition:"width .3s"}}/></div>
+      </div>
+      <div style={{padding:"24px 20px"}}>
+        <button onClick={()=>setFcFlip(!fcFlip)} style={{...card,width:"100%",textAlign:"left",minHeight:280,display:"flex",flexDirection:"column",justifyContent:"center",cursor:"pointer",animation:"flipIn .3s ease",border:`2px solid ${fcFlip?P.ok:P.line}`,padding:"28px 24px"}}>
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            <span style={bdg(ch.color)}>{ch.id} {ch.name}</span>
+            <span style={bdg(qTC(fcQ.type))}>{TL[fcQ.type]}</span>
+          </div>
+          {!fcFlip?<>
+            <div style={{fontSize:13,color:P.t3,marginBottom:8}}>문제 (탭하여 정답 보기)</div>
+            <div style={{fontSize:16,fontWeight:600,lineHeight:1.85,whiteSpace:"pre-wrap",color:P.t1}}>{fcQ.question}</div>
+          </>:<>
+            <div style={{fontSize:13,color:P.ok,marginBottom:8,fontWeight:700}}>정답</div>
+            <div style={{fontSize:16,fontWeight:600,lineHeight:1.85,whiteSpace:"pre-wrap",color:P.t1}}>{fcQ.explanation}</div>
+          </>}
+        </button>
+        <div style={{display:"flex",gap:8,marginTop:8}}>
+          <button onClick={()=>{setFcFlip(false);setFcIdx(Math.max(0,fcIdx-1));}} disabled={fcIdx===0} style={{...btn(P.dim,P.t1),flex:1,opacity:fcIdx===0?.3:1}}>← 이전</button>
+          {fcIdx<fcPool.length-1?
+            <button onClick={()=>{setFcFlip(false);setFcIdx(fcIdx+1);}} style={{...btn(P.dim,P.t1),flex:1}}>다음 →</button>:
+            <button onClick={()=>setPg("home")} style={{...btn(P.blue,"#fff"),flex:1}}>완료</button>}
+        </div>
+      </div>
+    </div>;
+  }
+
+  // ═══ OX ═══
+  if(pg==="ox"&&oxQs.length>0){const oxCur=oxQs[oxIx],answered=oxAns[oxCur?.id]!==undefined,correct=oxAns[oxCur?.id]===oxCur?.answer;
+    const totalO=Object.entries(oxAns).filter(([k,v])=>{const q=oxQs.find(x=>x.id===k);return q&&v===q.answer;}).length;
+    const totalX=Object.keys(oxAns).length-totalO;
+    if(oxDone)return<div style={W}><style>{css}</style>
+      <div style={{background:P.card,padding:"40px 24px 32px",textAlign:"center",marginBottom:12}}>
+        <div style={{fontSize:14,color:P.t3}}>OX 퀴즈 완료</div>
+        <div style={{display:"flex",justifyContent:"center",gap:32,marginTop:20}}>
+          <div><div style={{fontSize:36,fontWeight:800,color:P.ok}}>{totalO}</div><div style={{fontSize:13,color:P.t3}}>맞춤</div></div>
+          <div><div style={{fontSize:36,fontWeight:800,color:P.err}}>{totalX}</div><div style={{fontSize:13,color:P.t3}}>틀림</div></div>
+        </div>
+      </div>
+      <div style={section}>{oxQs.map((q,i)=>{const ua=oxAns[q.id],ok=ua===q.answer;return<div key={q.id} style={{...cardFlat,borderLeft:`4px solid ${ok?P.ok:P.err}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span style={{fontSize:14,fontWeight:800}}>Q{i+1}</span><span style={{fontSize:13,fontWeight:700,color:ok?P.ok:P.err}}>{ok?"정답":"오답"}</span><span style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:q.answer?P.ok:P.err}}>정답: {q.answer?"O":"X"}</span></div>
+        <div style={{fontSize:14,lineHeight:1.6,color:P.t2}}>{q.statement}</div>
+        <details style={{marginTop:6}}><summary style={{fontSize:13,color:P.blue,fontWeight:600,cursor:"pointer"}}>해설</summary><div style={{fontSize:14,lineHeight:1.85,padding:"10px 14px",background:P.dim,borderRadius:10,marginTop:6,whiteSpace:"pre-wrap",color:P.t2}}>{q.explanation}</div></details>
+      </div>})}</div>
+      <div style={{...section,marginTop:16}}><button onClick={()=>setPg("home")} style={btn(P.blue,"#fff")}>홈으로</button></div>
+    </div>;
+    return<div style={W}><style>{css}</style>
+      <div style={{position:"sticky",top:0,zIndex:10,background:"rgba(244,244,244,.92)",backdropFilter:"blur(12px)",padding:"12px 20px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={()=>setPg("home")} style={{fontSize:22,color:P.t3,minWidth:44,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+          <span style={{fontSize:15,fontWeight:700,color:P.blue}}>OX 퀴즈</span><span style={{flex:1}}/><span style={{fontSize:14,color:P.t3}}>{Object.keys(oxAns).length}/{oxQs.length}</span>
+        </div>
+        <div style={{height:3,background:P.line,borderRadius:2,marginTop:10,overflow:"hidden"}}><div style={{width:`${oxQs.length>0?(Object.keys(oxAns).length/oxQs.length)*100:0}%`,height:"100%",background:P.blue,borderRadius:2,transition:"width .3s"}}/></div>
+      </div>
+      <div style={{padding:"12px 20px"}}>
+        <div style={{...card,animation:"fadeUp .25s ease"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+            <div style={{width:36,height:36,borderRadius:10,background:P.blue,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800}}>{oxIx+1}</div>
+            <span style={{fontSize:13,color:P.t3}}>{oxCur.source}</span>
+          </div>
+          <div style={{fontSize:16,fontWeight:600,lineHeight:1.85,padding:"16px 18px",background:P.dim,borderRadius:12,whiteSpace:"pre-wrap",wordBreak:"keep-all",marginBottom:20}}>{oxCur.statement}</div>
+          <div style={{display:"flex",gap:12}}>
+            <button onClick={()=>{if(!answered)setOxAns(p=>({...p,[oxCur.id]:true}));}} style={{flex:1,padding:"20px",borderRadius:12,fontSize:24,fontWeight:800,background:answered?(oxCur.answer===true?"#E8F9F0":"#FFEFF0"):P.dim,color:answered?(oxCur.answer===true?P.ok:P.err):P.t1,border:oxAns[oxCur.id]===true?`3px solid ${oxCur.answer?P.ok:P.err}`:"3px solid transparent"}}>O</button>
+            <button onClick={()=>{if(!answered)setOxAns(p=>({...p,[oxCur.id]:false}));}} style={{flex:1,padding:"20px",borderRadius:12,fontSize:24,fontWeight:800,background:answered?(oxCur.answer===false?"#E8F9F0":"#FFEFF0"):P.dim,color:answered?(oxCur.answer===false?P.ok:P.err):P.t1,border:oxAns[oxCur.id]===false?`3px solid ${oxCur.answer===false?P.ok:P.err}`:"3px solid transparent"}}>X</button>
+          </div>
+          {answered&&<div style={{marginTop:16,padding:16,borderRadius:12,background:correct?"#E8F9F0":"#FFEFF0"}}>
+            <div style={{fontSize:17,fontWeight:800,color:correct?P.ok:P.err}}>{correct?"정답!":"오답!"} 정답은 {oxCur.answer?"O":"X"}</div>
+            <div style={{marginTop:8,fontSize:14,lineHeight:1.85,whiteSpace:"pre-wrap",color:P.t2}}>{oxCur.explanation}</div>
+          </div>}
+        </div>
+      </div>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:P.card,borderTop:`1px solid ${P.line}`,padding:"10px 20px 14px",maxWidth:isPC?1080:720,margin:"0 auto"}}>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setOxIx(i=>Math.max(0,i-1))} disabled={oxIx===0} style={{...btn(P.dim,P.t1),flex:1,minHeight:48,fontSize:15,opacity:oxIx===0?.3:1}}>← 이전</button>
+          {oxIx<oxQs.length-1?<button onClick={()=>setOxIx(i=>i+1)} style={{...btn(P.dim,P.t1),flex:1,minHeight:48,fontSize:15}}>다음 →</button>:
+          <button onClick={()=>setOxDone(true)} style={{...btn(P.blue,"#fff"),flex:1,minHeight:48,fontSize:15}}>결과 보기</button>}
+        </div>
+      </div>
+    </div>;
+  }
+
+  // ═══ HOME ═══
+  if(pg==="home")return<div style={W}><style>{css}</style>
+    {showLock&&<div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setShowLock(false)}>
+      <div style={{background:P.card,borderRadius:20,padding:"32px 24px",maxWidth:340,width:"100%",textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:28,marginBottom:6}}>🔒</div>
+        <div style={{fontSize:17,fontWeight:800,color:P.t1,marginBottom:4}}>프리미엄 기능</div>
+        <div style={{fontSize:14,color:P.blue,fontWeight:600,marginBottom:16}}>{lockMsg}</div>
+        <div style={{fontSize:13,color:P.t2,lineHeight:1.7,marginBottom:20}}>전 회차 기출 · 모의고사 · 스마트 복습<br/>취약단원 분석 · 오답노트 내보내기<br/><span style={{fontWeight:700,color:P.t1}}>월 5,000원</span></div>
+        <input type="text" value={lockInput} onChange={e=>setLockInput(e.target.value)} placeholder="이용권 코드" style={{width:"100%",padding:"14px",borderRadius:12,border:"1.5px solid "+(lockErr?P.err:P.line),fontSize:18,fontWeight:700,textAlign:"center",letterSpacing:3,fontFamily:"inherit",marginBottom:8}} onKeyDown={e=>{if(e.key==="Enter")confirmPro();}}/>
+        {lockErr&&<div style={{fontSize:13,color:P.err,marginBottom:6}}>코드가 올바르지 않습니다</div>}
+        <button onClick={confirmPro} style={{display:"block",width:"100%",padding:"14px",borderRadius:12,background:P.blue,color:"#fff",fontSize:16,fontWeight:700,border:"none",marginBottom:16}}>확인</button>
+        <div style={{fontSize:12,color:P.t3,lineHeight:1.7}}>{CONFIG.bankAccount} ({CONFIG.bankHolder}) 송금 후<br/>{CONFIG.contact}에서 코드 수령</div>
+        <button onClick={()=>setShowLock(false)} style={{marginTop:12,fontSize:13,color:P.t3,background:"none",border:"none",padding:"8px 16px"}}>닫기</button>
+      </div>
+    </div>}
+    {/* 헤더 + 북마크 아이콘 */}
+    <div style={{background:P.card,padding:"28px 20px 20px",marginBottom:12,display:"flex",alignItems:"flex-end"}}>
+      <button onClick={()=>{setPg("home");setTab("test");setSrchRes(null);setSrch("");}} style={{flex:1,textAlign:"left",background:"none",padding:0}}>
+        <div style={{fontSize:24,fontWeight:800,color:P.t1,letterSpacing:-.5}}>도시계획기사</div>
+        <div style={{fontSize:24,fontWeight:800,color:P.blue,letterSpacing:-.5}}>필답형 CBT{isPro&&<span style={{fontSize:11,fontWeight:700,color:"#fff",background:P.ok,padding:"2px 8px",borderRadius:6,marginLeft:8,verticalAlign:"middle"}}>PRO</span>}</div>
+      </button>
+      <button onClick={()=>{setTab("bklist");}} style={{position:"relative",width:44,height:44,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:12,background:tab==="bklist"?P.warn+"15":"transparent"}}>
+        <span style={{fontSize:22,color:bks.length>0?P.warn:P.t4}}>★</span>
+        {bks.length>0&&<span style={{position:"absolute",top:2,right:2,width:18,height:18,borderRadius:9,background:P.warn,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{bks.length}</span>}
+      </button>
+    </div>
+
+    {/* 탭 - 5개 (bklist일 때도 탭 바 보이되 선택 없음) */}
+    <div style={{margin:"0 20px",display:"flex",gap:2,background:P.dim,borderRadius:12,padding:3,marginBottom:16}}>
+      {[["test","시험"],["study","학습"],["wrong","오답"],["record","기록"],["search","검색"]].map(([id,lb])=><button key={id} onClick={()=>{track("tab_switch",{tab:id});setTab(id);setVsn(null);setOyr(null);window.scrollTo(0,0);}} style={{flex:"1 1 0",padding:"10px 0",borderRadius:10,fontSize:14,fontWeight:tab===id?700:500,color:tab===id?P.t1:P.t3,background:tab===id?P.card:"transparent",boxShadow:tab===id?"0 1px 3px rgba(0,0,0,.08)":"none",transition:"all .2s",textAlign:"center",overflow:"hidden"}}>{lb}{id==="wrong"&&wQs.length>0&&<span style={{marginLeft:2,fontSize:10,color:P.err,fontWeight:800}}>{wQs.length}</span>}</button>)}
+    </div>
+
+    {/* ━━━ 시험 탭: 기출 기반, 타이머 60분, 채점 ━━━ */}
+    {tab==="test"&&<div style={section}>
+      <div style={{...card,padding:"16px 20px",marginBottom:16,background:"#EBF4FF",borderRadius:14}}>
+        <div style={{fontSize:13,color:P.blue,fontWeight:700}}>시험 모드</div>
+        <div style={{fontSize:13,color:P.t3,marginTop:4,lineHeight:1.5}}>기출 기반 · 제한시간 60분 · 전체채점</div>
+      </div>
+
+      <button onClick={()=>goMock(QUESTIONS,"랜덤 모의고사")} style={{display:"flex",width:"100%",padding:"16px 20px",...cardFlat,alignItems:"center",marginBottom:6}}>
+        <span style={{flex:1,fontWeight:700,fontSize:17,textAlign:"left"}}>랜덤 모의고사</span><span style={{fontSize:14,color:P.t3}}>기출 5~8문항 · 40점 만점</span>
+      </button>
+      <button onClick={goWeak} style={{display:"flex",width:"100%",padding:"16px 20px",...cardFlat,alignItems:"center",marginBottom:6}}>
+        <span style={{flex:1,fontWeight:700,fontSize:17,textAlign:"left"}}>약점 집중</span><span style={{fontSize:14,color:P.t3}}>오답 많은 분야 위주</span>
+      </button>
+
+      <div style={{fontSize:17,fontWeight:800,marginTop:28,marginBottom:12,paddingLeft:4}}>연차별 기출</div>
+      {yrs.map(yr=><div key={yr} style={{marginBottom:6}}>
+        <button onClick={()=>setOyr(oyr===yr?null:yr)} style={{display:"flex",width:"100%",padding:"16px 20px",...cardFlat,marginBottom:oyr===yr?4:6,alignItems:"center",background:oyr===yr?"#EBF4FF":P.card}}>
+          <span style={{flex:1,fontWeight:700,fontSize:17,textAlign:"left"}}>{yr}</span>
+          <span style={{fontSize:14,color:P.t3,marginRight:4}}>{Object.keys(ym[yr]).length}회차</span>
+          <span style={{fontSize:14,color:P.t4,transform:oyr===yr?"rotate(90deg)":"none",transition:"transform .15s"}}>›</span>
+        </button>
+        {oyr===yr&&Object.entries(ym[yr]).sort().map(([ex,qs])=><div key={ex} style={{padding:"0 12px"}}><button onClick={()=>go(qs,"exam",ex)} style={{display:"flex",width:"100%",padding:"13px 16px",marginBottom:4,borderRadius:10,alignItems:"center",background:P.card,border:`1px solid ${P.line}`}}>
+          <span style={{flex:1,fontSize:14,fontWeight:600,textAlign:"left"}}>{ex.replace(yr+" ","")}</span>
+          <span style={{fontSize:13,color:P.t3}}>{qs.length}문항</span></button></div>)}
+      </div>)}
+    </div>}
+
+    {/* ━━━ 학습 탭: 타이머 없음, 즉시 확인, 부담없이 ━━━ */}
+    {tab==="study"&&<div style={section}>
+      <div style={{...card,padding:"16px 20px",marginBottom:16,background:"#E8F9F0",borderRadius:14}}>
+        <div style={{fontSize:13,color:P.ok,fontWeight:700}}>학습 모드</div>
+        <div style={{fontSize:13,color:P.t3,marginTop:4,lineHeight:1.5}}>시간제한 없음 · 문제별 즉시 확인</div>
+      </div>
+
+      {/* 스마트 학습 */}
+      <div style={{fontSize:15,fontWeight:800,marginBottom:10,paddingLeft:4}}>오늘의 학습</div>
+      <button onClick={goDailyDrill} style={{...btn(P.blue,"#fff"),marginBottom:8}}>데일리 드릴 10문항</button>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <button onClick={()=>startFlashcard(QUESTIONS)} style={{flex:1,...card,textAlign:"center",padding:"14px 8px",marginBottom:0}}><div style={{fontSize:22}}>📇</div><div style={{fontSize:13,fontWeight:600,color:P.t2,marginTop:4}}>플래시카드</div></button>
+        <button onClick={genOx} style={{flex:1,...card,textAlign:"center",padding:"14px 8px",marginBottom:0}}><div style={{fontSize:22}}>⭕</div><div style={{fontSize:13,fontWeight:600,color:P.t2,marginTop:4}}>OX 퀴즈</div></button>
+      </div>
+
+      {/* 모의고사 */}
+      <div style={{fontSize:15,fontWeight:800,marginBottom:10,paddingLeft:4}}>모의고사</div>
+      <div style={{marginBottom:12}}>
+        <button onClick={()=>setOyr(oyr==="mock"?null:"mock")} style={{display:"flex",width:"100%",padding:"14px 18px",...cardFlat,marginBottom:oyr==="mock"?4:0,alignItems:"center",background:oyr==="mock"?"#EBF4FF":P.card}}>
+          <span style={{flex:1,fontWeight:700,fontSize:15,textAlign:"left"}}>일반 모의고사</span>
+          <span style={{fontSize:13,color:P.t3,marginRight:4}}>{(()=>{const mm={};QUESTIONS.filter(q=>q.exam.startsWith("모의고사")).forEach(q=>{if(!mm[q.exam])mm[q.exam]=[];});return Object.keys(mm).length;})()}회차</span>
+          <span style={{fontSize:14,color:P.t4,transform:oyr==="mock"?"rotate(90deg)":"none",transition:"transform .15s"}}>›</span>
+        </button>
+        {oyr==="mock"&&(()=>{const mm={};QUESTIONS.filter(q=>q.exam.startsWith("모의고사")).forEach(q=>{if(!mm[q.exam])mm[q.exam]=[];mm[q.exam].push(q);});return Object.entries(mm).sort((a,b)=>{const na=parseInt(a[0].match(/\d+/)),nb=parseInt(b[0].match(/\d+/));return na-nb;}).map(([ex,qs])=><div key={ex} style={{padding:"0 10px"}}><button onClick={()=>go(qs,"drill",ex)} style={{display:"flex",width:"100%",padding:"12px 14px",marginBottom:4,borderRadius:8,alignItems:"center",background:P.card,border:`1px solid ${P.line}`}}>
+          <span style={{flex:1,fontSize:13,fontWeight:600,textAlign:"left"}}>{ex.replace("모의고사 ","")}</span>
+          <span style={{fontSize:12,color:P.t3}}>{qs.length}문항</span></button></div>);})()}
+      </div>
+
+      {/* 자유 학습 */}
+      <div style={{fontSize:15,fontWeight:800,marginBottom:10,paddingLeft:4}}>자유 학습</div>
+      <div style={{display:"flex",gap:8,marginBottom:8}}>
+        <button onClick={()=>go([...QUESTIONS].filter(q=>q.exam!=="연습문제"),"drill","전체 기출")} style={{flex:1,...card,textAlign:"center",padding:"14px 8px",marginBottom:0}}><div style={{fontSize:18,fontWeight:800,color:P.blue}}>{QUESTIONS.filter(q=>q.exam!=="연습문제").length}</div><div style={{fontSize:12,color:P.t3,marginTop:2}}>전체 기출</div></button>
+        <button onClick={()=>(()=>{const all=QUESTIONS.filter(q=>q.exam==="연습문제");isPro?go(all,"drill","연습문제"):go(all.slice(0,CONFIG.freePracticeCount),"drill","연습문제 (무료 "+CONFIG.freePracticeCount+"문항)");})()} style={{flex:1,...card,textAlign:"center",padding:"14px 8px",marginBottom:0}}><div style={{fontSize:18,fontWeight:800,color:P.ok}}>{QUESTIONS.filter(q=>q.exam==="연습문제").length}</div><div style={{fontSize:12,color:P.t3,marginTop:2}}>연습문제</div></button>
+      </div>
+      <div style={{fontSize:13,fontWeight:600,color:P.t3,margin:"8px 0 6px",paddingLeft:4}}>유형별</div>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>{TYPES.map(t=>{const qs=QUESTIONS.filter(q=>q.type===t);return<button key={t} onClick={()=>go(qs,"drill",TL[t])} style={{flex:1,...card,textAlign:"center",marginBottom:0,padding:"12px 8px"}}><div style={{fontSize:12,fontWeight:700,color:qTC(t)}}>{TL[t]}</div><div style={{fontSize:17,fontWeight:800,color:P.t1,marginTop:2}}>{qs.length}</div></button>;})}</div>
+
+      {/* 단원별 (접기/펼치기) */}
+      <button onClick={()=>setOyr(oyr==="chapters"?null:"chapters")} style={{display:"flex",width:"100%",padding:"14px 18px",...cardFlat,alignItems:"center",marginBottom:oyr==="chapters"?8:0,background:oyr==="chapters"?P.blue+"08":P.card}}>
+        <span style={{flex:1,fontSize:15,fontWeight:800,textAlign:"left"}}>단원별 학습 (Ⅰ~Ⅷ)</span>
+        <span style={{fontSize:14,color:P.t4,transform:oyr==="chapters"?"rotate(90deg)":"none",transition:"transform .15s"}}>›</span>
+      </button>
+      {oyr==="chapters"&&chapterStats.map(ch=>{const pct=ch.total>0?Math.round(ch.solved/ch.total*100):0;
+        return<div key={ch.id} style={{marginBottom:4}}>
+          <button onClick={()=>setVsn(vsn===ch.id?null:ch.id)} style={{display:"flex",width:"100%",padding:"12px 14px",...cardFlat,marginBottom:vsn===ch.id?4:0,alignItems:"center",background:vsn===ch.id?ch.color+"10":P.card}}>
+            <div style={{width:32,height:32,borderRadius:8,background:ch.color+"18",color:ch.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,marginRight:10,flexShrink:0}}>{ch.id}</div>
+            <div style={{flex:1,textAlign:"left"}}>
+              <div style={{fontSize:14,fontWeight:700}}>{ch.name}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3}}>
+                <div style={{flex:1,height:4,background:P.dim,borderRadius:2,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",background:ch.color,borderRadius:2}}/></div>
+                <span style={{fontSize:10,fontWeight:700,color:P.t3}}>{ch.solved}/{ch.total}</span>
+              </div>
+            </div>
+            <span style={{fontSize:14,fontWeight:800,color:ch.rate>=70?P.ok:ch.rate>=40?P.warn:ch.total===0?P.t4:P.err,marginLeft:8}}>{ch.rate}%</span>
+          </button>
+          {vsn===ch.id&&<div style={{padding:"4px 8px 4px",display:"flex",gap:5,flexWrap:"wrap"}}>
+            <button onClick={()=>{const qs=QUESTIONS.filter(q=>getChapter(q).id===ch.id);go(qs,"drill",ch.id+" "+ch.name);}} style={{padding:"7px 14px",borderRadius:7,fontSize:12,fontWeight:700,background:ch.color,color:"#fff"}}>전체 {ch.total}</button>
+            <button onClick={()=>{const qs=QUESTIONS.filter(q=>getChapter(q).id===ch.id&&q.exam==="연습문제");go(qs.length?qs:QUESTIONS.filter(q=>getChapter(q).id===ch.id),"drill",ch.id+" 연습");}} style={{padding:"7px 14px",borderRadius:7,fontSize:12,fontWeight:600,background:P.dim,color:P.t2}}>연습</button>
+            <button onClick={()=>startFlashcard(QUESTIONS.filter(q=>getChapter(q).id===ch.id))} style={{padding:"7px 14px",borderRadius:7,fontSize:12,fontWeight:600,background:P.dim,color:P.t2}}>카드</button>
+            {(()=>{const wq=QUESTIONS.filter(q=>getChapter(q).id===ch.id&&wIds.includes(q.id));return wq.length>0?<button onClick={()=>go(wq,"drill",ch.id+" 오답")} style={{padding:"7px 14px",borderRadius:7,fontSize:12,fontWeight:600,background:P.err+"15",color:P.err}}>오답 {wq.length}</button>:null;})()}
+          </div>}
+        </div>;})}
+    </div>}
+
+    {/* ━━━ 오답 탭 ━━━ */}
+    {tab==="wrong"&&<div style={section}>{wQs.length===0?<div style={{...card,textAlign:"center",padding:40}}><div style={{fontSize:16,fontWeight:700,color:P.t2}}>오답이 없습니다</div><div style={{fontSize:14,color:P.t3,marginTop:4}}>문제를 풀어보세요</div></div>:<>
+      <div style={{...card,textAlign:"center",padding:"20px",marginBottom:12}}>
+        <div style={{fontSize:36,fontWeight:900,color:P.err}}>{wQs.length}</div>
+        <div style={{fontSize:14,color:P.t3,marginTop:4}}>틀린 문항</div>
+        <button onClick={()=>go(wQs,"drill","오답복습")} style={{...btn(P.err,"#fff"),marginTop:12}}>전체 다시 풀기</button>
+      </div>
+      <div style={{fontSize:14,fontWeight:700,marginBottom:8,paddingLeft:4}}>단원별 오답</div>
+      {CHAPTERS.map(ch=>{const wq=wQs.filter(q=>getChapter(q).id===ch.id);if(!wq.length)return null;return<button key={ch.id} onClick={()=>go(wq,"drill",ch.id+" 오답")} style={{display:"flex",width:"100%",padding:"12px 16px",...cardFlat,alignItems:"center",marginBottom:4}}>
+        <div style={{width:32,height:32,borderRadius:8,background:ch.color+"18",color:ch.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,marginRight:10}}>{ch.id}</div>
+        <span style={{flex:1,fontSize:14,fontWeight:600,textAlign:"left"}}>{ch.name}</span>
+        <span style={{fontSize:15,fontWeight:800,color:P.err}}>{wq.length}</span>
+      </button>;})}
+      <div style={{fontSize:14,fontWeight:700,marginBottom:8,marginTop:16,paddingLeft:4}}>유형별 오답</div>
+      <div style={{display:"flex",gap:8}}>{TYPES.map(t=>{const wq=wQs.filter(q=>q.type===t);if(!wq.length)return null;return<button key={t} onClick={()=>go(wq,"drill",TL[t]+" 오답")} style={{flex:1,...card,textAlign:"center",padding:"10px 6px",marginBottom:0}}><div style={{fontSize:12,fontWeight:700,color:qTC(t)}}>{TL[t]}</div><div style={{fontSize:16,fontWeight:800,color:P.err,marginTop:2}}>{wq.length}</div></button>;})}</div>
+    </>}</div>}
+
+    {/* ─── 기록 탭 (COMCBT 스타일) ─── */}
+    {tab==="record"&&<div style={section}>{sns.length===0&&hs.length===0?<div style={{...card,textAlign:"center",padding:40}}><div style={{fontSize:16,color:P.t3}}>아직 기록이 없어요</div></div>:<>
+      {/* 전체 정답률 대시보드 */}
+      {hs.length>0&&<div style={card}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:12}}>단원별 정답률</div>
+        {chapterStats.map(ch=>{return<div key={ch.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <span style={{fontSize:13,fontWeight:800,color:ch.color,width:24,textAlign:"center"}}>{ch.id}</span>
+          <span style={{fontSize:13,fontWeight:600,width:70,flexShrink:0,color:P.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ch.name}</span>
+          <div style={{flex:1,height:7,background:P.dim,borderRadius:4,overflow:"hidden"}}><div style={{width:ch.rate+"%",height:"100%",background:ch.rate>=70?P.ok:ch.rate>=40?P.warn:ch.total===0?P.t4:P.err,borderRadius:4,transition:"width .4s"}}/></div>
+          <span style={{fontSize:13,fontWeight:700,minWidth:36,textAlign:"right"}}>{ch.rate}%</span>
+        </div>;})}
+        <div style={{height:16}}/>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:12}}>유형별 정답률</div>
+        {TYPES.map(t=>{const d=stats.bt[t],r=d.n>0?Math.round(d.c/d.n*100):0;return<div key={t} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{fontSize:14,fontWeight:600,width:60,flexShrink:0,color:qTC(t)}}>{TL[t]}</span><div style={{flex:1,height:10,background:P.dim,borderRadius:5,overflow:"hidden"}}><div style={{width:r+"%",height:"100%",background:qTC(t),borderRadius:5,transition:"width .4s"}}/></div><span style={{fontSize:14,fontWeight:700,minWidth:44,textAlign:"right"}}>{r}%</span></div>;})}
+        <div style={{height:12}}/>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:12}}>분야별 정답률</div>
+        {Object.entries(stats.bc).sort((a,b)=>(a[1].n>0?a[1].c/a[1].n:0)-(b[1].n>0?b[1].c/b[1].n:0)).map(([cat,d])=>{const r=d.n>0?Math.round(d.c/d.n*100):0;return<div key={cat} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><span style={{fontSize:14,fontWeight:600,width:100,flexShrink:0,color:P.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat}</span><div style={{flex:1,height:8,background:P.dim,borderRadius:4,overflow:"hidden"}}><div style={{width:r+"%",height:"100%",background:r>=70?P.ok:r>=40?P.warn:P.err,borderRadius:4}}/></div><span style={{fontSize:14,fontWeight:700,minWidth:44,textAlign:"right"}}>{r}%</span></div>;})}
+      </div>}
+      {/* COMCBT 스타일 세션 기록 */}
+      {sns.length>0&&<div style={card}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>풀이 기록</div>
+        <div style={{fontSize:12,color:P.t3,marginBottom:12}}>탭하여 상세 보기</div>
+        <div style={{borderRadius:12,border:`1px solid ${P.line}`,overflow:"hidden"}}>
+          {/* 헤더 */}
+          <div style={{display:"flex",padding:"10px 14px",background:P.dim,fontSize:12,fontWeight:700,color:P.t3}}>
+            <span style={{flex:2}}>시험명</span><span style={{flex:1,textAlign:"center"}}>점수</span><span style={{flex:1,textAlign:"center"}}>시간</span><span style={{flex:1,textAlign:"center"}}>득점률</span>
+          </div>
+          {[...sns].reverse().map((s,i)=>{const p=s.mx>0?Math.round(s.sc/s.mx*100):0,ri=sns.length-1-i;
+            return<div key={i}>
+              <button onClick={()=>setVsn(vsn===ri?null:ri)} style={{display:"flex",width:"100%",padding:"12px 14px",alignItems:"center",borderTop:`1px solid ${P.line}`,textAlign:"left",background:vsn===ri?P.dim:P.card}}>
+                <div style={{flex:2}}><div style={{fontSize:14,fontWeight:600}}>{s.nm}</div><div style={{fontSize:11,color:P.t3,marginTop:2}}>{fmtD(s.ts)}</div></div>
+                <div style={{flex:1,textAlign:"center"}}><span style={{fontSize:15,fontWeight:800,color:p>=60?P.ok:P.err}}>{s.sc}</span><span style={{fontSize:12,color:P.t3}}>/{s.mx}</span></div>
+                <div style={{flex:1,textAlign:"center",fontSize:13,color:P.t3}}>{fmtT(s.el)}</div>
+                <div style={{flex:1,textAlign:"center"}}><span style={{fontSize:14,fontWeight:800,color:p>=60?P.ok:p>=40?P.warn:P.err}}>{p}%</span></div>
+              </button>
+              {/* 상세 펼치기 - COMCBT 스타일 */}
+              {vsn===ri&&<div style={{padding:"12px 14px",borderTop:`1px solid ${P.line}`,background:"#FAFBFC"}}>
+                <div style={{display:"flex",gap:12,marginBottom:12}}>
+                  <div style={{flex:1,textAlign:"center",padding:10,background:P.card,borderRadius:8}}><div style={{fontSize:20,fontWeight:800,color:P.t1}}>{s.qc}</div><div style={{fontSize:11,color:P.t3}}>총 문항</div></div>
+                  <div style={{flex:1,textAlign:"center",padding:10,background:P.card,borderRadius:8}}><div style={{fontSize:20,fontWeight:800,color:P.ok}}>{s.qc-(s.wi?.length||0)}</div><div style={{fontSize:11,color:P.t3}}>맞춤</div></div>
+                  <div style={{flex:1,textAlign:"center",padding:10,background:P.card,borderRadius:8}}><div style={{fontSize:20,fontWeight:800,color:P.err}}>{s.wi?.length||0}</div><div style={{fontSize:11,color:P.t3}}>틀림</div></div>
+                  <div style={{flex:1,textAlign:"center",padding:10,background:P.card,borderRadius:8}}><div style={{fontSize:20,fontWeight:800,color:p>=60?P.ok:P.err}}>{p}%</div><div style={{fontSize:11,color:P.t3}}>득점률</div></div>
+                </div>
+                {s.wi?.length>0&&<>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><span style={{fontSize:13,fontWeight:700,color:P.err}}>틀린 문제 목록</span>
+                    <button onClick={()=>{const wqs=QUESTIONS.filter(q=>s.wi.includes(q.id));go(wqs,"drill",s.nm+" 오답");}} style={{padding:"6px 14px",borderRadius:8,background:P.err,color:"#fff",fontSize:13,fontWeight:700}}>다시 풀기</button>
+                  </div>
+                  {s.wi.map(qId=>{const q=QUESTIONS.find(x=>x.id===qId);if(!q)return null;return<div key={qId} style={{padding:"8px 12px",background:P.card,borderRadius:10,marginBottom:4,border:`1px solid ${P.line}`}}><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={bdg(qTC(q.type))}>{TL[q.type]}</span><span style={{fontSize:13,color:P.t3}}>{q.exam}</span></div><div style={{fontSize:13,marginTop:4,lineHeight:1.5,maxHeight:36,overflow:"hidden",whiteSpace:"pre-wrap",color:P.t2}}>{q.question}</div></div>;})}
+                </>}
+              </div>}
+            </div>;})}
+        </div>
+      </div>}
+      <button onClick={()=>{if(confirm("학습 기록을 모두 삭제합니까?")){setHs([]);setSns([]);setBks([]);setVsn(null);localStorage.removeItem(LS);localStorage.removeItem(SS);localStorage.removeItem(BK);}}} style={{fontSize:14,color:P.t4,padding:"16px 0",width:"100%",textAlign:"center"}}>기록 초기화</button>
+    </>}</div>}
+
+    {/* ━━━ 북마크 목록 (헤더 ★ 클릭 시) ━━━ */}
+    {tab==="bklist"&&<div style={section}>
+      <div style={{fontSize:17,fontWeight:800,marginBottom:12,paddingLeft:4}}>북마크 {bks.length}문제</div>
+      {bks.length===0?<div style={{...card,textAlign:"center",padding:40,color:P.t3}}>북마크한 문제가 없습니다</div>:<>
+        <button onClick={()=>go(QUESTIONS.filter(q=>bks.includes(q.id)),"drill","북마크")} style={{...btn(P.warn,"#fff"),marginBottom:12}}>전체 풀기</button>
+        {QUESTIONS.filter(q=>bks.includes(q.id)).map(q=>{const ch=getChapter(q);return<button key={q.id} onClick={()=>go([q],"drill","북마크")} style={{...cardFlat,width:"100%",textAlign:"left",display:"block",borderLeft:`4px solid ${ch.color}`,marginBottom:4}}>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+            <span style={bdg(ch.color)}>{ch.id}</span>
+            <span style={bdg(qTC(q.type))}>{TL[q.type]}</span>
+            <span style={{fontSize:12,color:P.t3}}>{q.exam}</span>
+            <button onClick={e=>{e.stopPropagation();toggleBk(q.id);}} style={{marginLeft:"auto",fontSize:18,color:P.warn}}>★</button>
+          </div>
+          <div style={{fontSize:13,lineHeight:1.5,maxHeight:40,overflow:"hidden",whiteSpace:"pre-wrap",color:P.t2}}>{q.question}</div>
+        </button>;})}
+      </>}
+    </div>}
+
+    {/* ─── 검색 탭 ─── */}
+    {tab==="search"&&<div style={section}>
+      <input type="text" value={srch} onChange={e=>{setSrch(e.target.value);doSearch(e.target.value);}} placeholder="키워드, 태그, 법령명으로 검색..." style={{...inp,marginBottom:16}}/>
+      {srch.trim()&&(()=>{
+        const t=srch.toLowerCase();
+        const lawRes=[];
+        LAWS.forEach(law=>{law.items.forEach(it=>{if((it.title+it.sum+it.art+law.cat).toLowerCase().includes(t))lawRes.push({...it,cat:law.cat});});});
+        return<>
+          {lawRes.length>0&&<>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:8,paddingLeft:4,color:P.blue}}>법령 조문 {lawRes.length}건</div>
+            {lawRes.slice(0,10).map((l,i)=><div key={i} style={{...cardFlat,borderLeft:`4px solid ${P.blue}`,marginBottom:4}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+                <span style={{fontSize:12,fontWeight:700,color:P.blue,padding:"2px 8px",background:P.blue+"12",borderRadius:4}}>{l.cat}</span>
+                <span style={{fontSize:13,fontWeight:700,color:P.t1}}>{l.art}</span>
+                <span style={{fontSize:13,color:P.t2}}>{l.title}</span>
+              </div>
+              <div style={{fontSize:13,lineHeight:1.6,color:P.t2}}>{l.sum}</div>
+            </div>)}
+            <div style={{height:12}}/>
+          </>}
+          {srchRes!==null&&<>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:8,paddingLeft:4,color:P.ok}}>관련 문제 {srchRes.length}건</div>
+            {srchRes.slice(0,20).map(q=>{const ch=getChapter(q);return<button key={q.id} onClick={()=>go([q],"drill","검색")} style={{...cardFlat,width:"100%",textAlign:"left",display:"block",borderLeft:`4px solid ${ch.color}`,marginBottom:4}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+                <span style={bdg(ch.color)}>{ch.id}</span>
+                <span style={bdg(qTC(q.type))}>{TL[q.type]}</span>
+                <span style={{fontSize:12,color:P.t3}}>{q.exam}</span>
+                <button onClick={e=>{e.stopPropagation();toggleBk(q.id);}} style={{marginLeft:"auto",fontSize:18,color:bks.includes(q.id)?P.warn:P.t4}}>{bks.includes(q.id)?"★":"☆"}</button>
+              </div>
+              <div style={{fontSize:13,lineHeight:1.5,maxHeight:40,overflow:"hidden",whiteSpace:"pre-wrap",color:P.t2}}>{q.question}</div>
+            </button>;})}
+          </>}
+          {lawRes.length===0&&(!srchRes||srchRes.length===0)&&<div style={{...card,textAlign:"center",padding:32,color:P.t3}}>검색 결과 없음</div>}
+        </>;
+      })()}
+      {!srch.trim()&&<>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+          {["용도지역","건폐율","용적률","도시재생","정비사업","산업단지","지구단위계획","도시혁신구역","수도권","도로","공원","법령개정"].map(t=><button key={t} onClick={()=>{setSrch(t);doSearch(t);}} style={{padding:"7px 14px",borderRadius:8,fontSize:13,fontWeight:600,background:P.card,border:`1px solid ${P.line}`,color:P.t2}}>{t}</button>)}
+        </div>
+        <div style={{...card,padding:"16px 20px",marginBottom:8}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:12}}>핵심 법령 요약 <span style={{fontSize:12,color:P.t3,fontWeight:500}}>{LAWS.reduce((a,l)=>a+l.items.length,0)}개 조문</span></div>
+        {LAWS.map(law=><details key={law.cat} style={{marginBottom:8}}>
+          <summary style={{fontSize:14,fontWeight:700,color:P.blue,cursor:"pointer",padding:"8px 0",borderBottom:`1px solid ${P.line}`}}>{law.cat} <span style={{fontSize:12,color:P.t3,fontWeight:500}}>({law.items.length})</span></summary>
+          <div style={{padding:"8px 0"}}>
+          {law.items.map((it,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:6,paddingLeft:4}}>
+            <span style={{fontSize:12,fontWeight:700,color:it.title.includes("⚡")?P.err:P.t3,minWidth:70,flexShrink:0}}>{it.art}</span>
+            <div><div style={{fontSize:13,fontWeight:600,color:P.t1}}>{it.title}</div><div style={{fontSize:12,color:P.t3,marginTop:1,lineHeight:1.4}}>{it.sum}</div></div>
+          </div>)}
+          </div>
+        </details>)}
+      </div>
+      </>}
+    </div>}
+
+    <CoupangAd location="home"/>
+    <div style={{fontSize:10,color:P.t4,padding:"12px 20px 4px",textAlign:"center",lineHeight:1.5}}>이 사이트는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</div>
+    <div style={{textAlign:"center",padding:"16px 20px 16px",color:P.t4,fontSize:12,lineHeight:1.6}}>
+      <div style={{fontWeight:600}}>{CONFIG.footerText}</div>
+      <div style={{marginTop:4}}>{CONFIG.siteUrl}</div>
+    </div>
+  </div>;
+
+  // ═══ SOLVE ═══
+  if(pg==="solve"&&cq){const done=Object.keys(gr).length;const ch=getChapter(cq);return<div style={W}><style>{css}</style>
+    <div style={{position:"sticky",top:0,zIndex:10,background:"rgba(244,244,244,.92)",backdropFilter:"blur(12px)",padding:"12px 20px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <button onClick={()=>{setRn(false);setPg("home");}} style={{fontSize:22,color:P.t3,minWidth:44,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+        <div style={{flex:1}}>{isDrill?<span style={{fontSize:15,fontWeight:700,color:P.blue}}>학습 모드</span>:<>
+          <div style={{fontFamily:"monospace",fontSize:20,fontWeight:800,color:isExam&&tm<300&&tm>0?P.err:P.t1,animation:isExam&&tm<300&&tm>0?"pulse 1s infinite":"none"}}>{isExam?(tm<=0?"00:00":fmtT(tm)):fmtT(tm)}</div>
+          {isExam&&<div style={{fontSize:12,color:P.t3}}>남은시간</div>}
+        </>}</div>
+        <span style={{fontSize:14,color:P.t3}}>{done}/{sq.length}</span>
+        <button onClick={da} style={{padding:"10px 20px",borderRadius:10,background:P.blue,color:"#fff",fontSize:14,fontWeight:700}}>{isDrill?"전체확인":"전체채점"}</button>
+      </div>
+      <div style={{height:3,background:P.line,borderRadius:2,marginTop:10,overflow:"hidden"}}><div style={{width:`${sq.length>0?(done/sq.length)*100:0}%`,height:"100%",background:P.blue,borderRadius:2,transition:"width .3s"}}/></div>
+    </div>
+
+    <div style={{padding:"12px 20px"}}>
+      <div style={{...card,animation:"fadeUp .25s ease"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <div style={{width:36,height:36,borderRadius:10,background:P.blue,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800}}>{ix+1}</div>
+          <span style={bdg(ch.color)}>{ch.id}</span>
+          <span style={bdg(qTC(cq.type))}>{TL[cq.type]}</span>
+          <span style={{fontSize:13,color:P.t3}}>{cq.exam}</span>
+          <button onClick={()=>toggleBk(cq.id)} style={{marginLeft:"auto",fontSize:20,color:bks.includes(cq.id)?P.warn:P.t4}}>{bks.includes(cq.id)?"★":"☆"}</button>
+          {!isDrill&&<span style={{fontSize:15,fontWeight:700,color:P.blue}}>{cq.points}점</span>}
+          {isDrill&&<span style={{fontSize:13,fontWeight:600,color:P.t3}}>{cq.points}점</span>}
+        </div>
+        <div style={{fontSize:16,fontWeight:600,lineHeight:1.85,padding:"16px 18px",background:P.dim,borderRadius:12,whiteSpace:"pre-wrap",wordBreak:"keep-all",marginBottom:16,color:P.t1}}>{cq.question}</div>
+
+        {cq.subs?<div style={{display:"flex",flexDirection:"column",gap:10}}>{cq.subs.map((sub,i)=><div key={i}><div style={{fontSize:14,fontWeight:600,color:P.t2,marginBottom:6,paddingLeft:2}}>{sub.label}</div><input type="text" value={(ca[cq.id]||[])[i]||""} onChange={e=>{setCa(p=>{const c2=p[cq.id]||[],n=[...c2];n[i]=e.target.value;return{...p,[cq.id]:n};});}} placeholder="답 입력" style={inp}/></div>)}</div>:
+        cq.type==="calculation"?<div style={{display:"flex",flexDirection:"column",gap:10}}>{cq.steps.map((st,i)=><div key={i}><div style={{fontSize:14,fontWeight:600,color:P.t2,marginBottom:6,paddingLeft:2}}>{i+1}. {st.label} {st.unit&&"("+st.unit+")"}</div><input type="text" value={(ca[cq.id]||[])[i]||""} onChange={e=>{setCa(p=>{const c2=p[cq.id]||[],n=[...c2];n[i]=e.target.value;return{...p,[cq.id]:n};});}} placeholder="답 입력" style={{...inp,fontFamily:"monospace"}}/></div>)}</div>:
+        <textarea value={an[cq.id]||""} onChange={e=>setAn(p=>({...p,[cq.id]:e.target.value}))} placeholder={cq.type==="keyword_essay"?"핵심 키워드를 포함하여 서술하세요.":"정답을 입력하세요"} rows={cq.type==="keyword_essay"?5:3} style={{...inp,resize:"vertical"}}/>}
+
+        <div style={{display:"flex",gap:8,marginTop:16}}>
+          <button onClick={dg} disabled={!!gr[cq.id]} style={{...btn(gr[cq.id]?P.dim:P.blue,gr[cq.id]?P.t3:"#fff"),flex:1,opacity:gr[cq.id]?.5:1}}>{isDrill?"확인":"채점"}</button>
+          <button onClick={()=>setSe(p=>({...p,[cq.id]:!p[cq.id]}))} style={{...btn(P.card,P.t2,`1px solid ${P.line}`),flex:1}}>{se[cq.id]?"해설 닫기":"해설"}</button>
+        </div>
+
+        {gr[cq.id]&&<div style={{marginTop:16,padding:16,borderRadius:12,background:gr[cq.id].s>=gr[cq.id].m*.8?"#E8F9F0":gr[cq.id].s>0?"#FFF8E6":"#FFEFF0"}}>
+          {isDrill?<div style={{fontSize:17,fontWeight:800,color:gr[cq.id].s>=gr[cq.id].m*.8?P.ok:P.err}}>{gr[cq.id].s>=gr[cq.id].m*.8?"✓ 맞았습니다":"✗ 틀렸습니다"} ({gr[cq.id].s}/{gr[cq.id].m})</div>:<div style={{fontSize:22,fontWeight:800,color:gr[cq.id].s>=gr[cq.id].m*.8?P.ok:gr[cq.id].s>0?P.warn:P.err}}>{gr[cq.id].s}/{gr[cq.id].m}점</div>}
+          {gr[cq.id].fb?.map((f,i)=><div key={i} style={{fontSize:14,color:P.t2,padding:"4px 0",lineHeight:1.5}}>{f}</div>)}
+          {gr[cq.id].rs?.map((r,i)=><div key={i} style={{fontSize:14,padding:"4px 0",color:r.ok?P.ok:P.err}}>{r.ok?"✓":"✗"} {r.lb} {!r.ok&&r.ans&&"→ "+r.ans}</div>)}
+          <div style={{marginTop:10,padding:"14px 16px",background:P.card,borderRadius:10,fontSize:14,lineHeight:1.85,whiteSpace:"pre-wrap",color:P.t2}}>{cq.explanation}</div>
+        </div>}
+        {se[cq.id]&&!gr[cq.id]&&<div style={{marginTop:16,padding:"14px 16px",background:"#EBF4FF",borderRadius:12,fontSize:14,lineHeight:1.85,whiteSpace:"pre-wrap",color:P.t1}}>{cq.explanation}</div>}
+      </div>
+    </div>
+
+    <div style={{position:"fixed",bottom:0,left:0,right:0,background:P.card,borderTop:`1px solid ${P.line}`,padding:"10px 20px 14px",maxWidth:isPC?1080:720,margin:"0 auto"}}>
+      <div style={{display:"flex",gap:8,marginBottom:8}}>
+        <button onClick={()=>setIx(i=>Math.max(0,i-1))} disabled={ix===0} style={{...btn(P.dim,P.t1),flex:1,minHeight:48,fontSize:15,opacity:ix===0?.3:1}}>← 이전</button>
+        <button onClick={()=>setIx(i=>Math.min(sq.length-1,i+1))} disabled={ix===sq.length-1} style={{...btn(P.dim,P.t1),flex:1,minHeight:48,fontSize:15,opacity:ix===sq.length-1?.3:1}}>다음 →</button>
+      </div>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}}>{(()=>{
+        const pg10=Math.floor(ix/10);const start=pg10*10;const end=Math.min(start+10,sq.length);const btns=[];
+        if(pg10>0)btns.push(<button key="prev10" onClick={()=>setIx(start-1)} style={{width:34,height:34,borderRadius:8,background:P.dim,color:P.t3,fontSize:11,fontWeight:700}}>‹‹</button>);
+        for(let i=start;i<end;i++){const q=sq[i],g=gr[q.id],col=g?(g.s>=g.m*.8?P.ok:g.s>0?P.warn:P.err):(an[q.id]||ca[q.id]?P.warn+"60":P.line);
+          btns.push(<button key={q.id} onClick={()=>setIx(i)} style={{width:34,height:34,borderRadius:8,border:i===ix?`2.5px solid ${P.blue}`:"2px solid transparent",background:g?col+"18":i===ix?P.blue+"10":P.dim,color:i===ix?P.blue:g?(g.s>=g.m*.8?P.ok:P.err):P.t3,fontSize:12,fontWeight:700}}>{i+1}</button>);
+        }
+        if(end<sq.length)btns.push(<button key="next10" onClick={()=>setIx(end)} style={{width:34,height:34,borderRadius:8,background:P.dim,color:P.t3,fontSize:11,fontWeight:700}}>››</button>);
+        return btns;
+      })()}</div>
+    </div>
+  </div>;}
+
+  // ═══ RESULT ═══
+  if(pg==="result")return<div style={W}><style>{css}</style>
+    <div style={{background:P.card,padding:"40px 24px 32px",textAlign:"center",marginBottom:12}}>
+      {isDrill?<><div style={{fontSize:14,color:P.t3}}>학습 완료</div><div style={{fontSize:15,fontWeight:600,color:P.t2,marginTop:4}}>{sn}</div>
+        <div style={{display:"flex",justifyContent:"center",gap:24,marginTop:20}}>
+          <div><div style={{fontSize:36,fontWeight:800,color:P.ok}}>{sq.filter(q=>gr[q.id]&&gr[q.id].s>=gr[q.id].m*.8).length}</div><div style={{fontSize:13,color:P.t3}}>맞춤</div></div>
+          <div><div style={{fontSize:36,fontWeight:800,color:P.err}}>{sq.filter(q=>gr[q.id]&&gr[q.id].s<gr[q.id].m*.8).length}</div><div style={{fontSize:13,color:P.t3}}>틀림</div></div>
+        </div>
+      </>:<><div style={{fontSize:14,color:P.t3}}>{sn}</div>
+        <div style={{fontSize:52,fontWeight:900,color:P.t1,letterSpacing:-3,marginTop:8}}>{rawTs}<span style={{fontSize:20,fontWeight:600,color:P.t3}}>/{rawMx}</span></div>
+        <div style={{fontSize:15,color:P.t2,marginTop:8}}>{fmtT(el)} 소요 · {rawMx>0?Math.round(rawTs/rawMx*100):0}%</div>
+      </>}
+    </div>
+    <div style={section}>{sq.map((q,i)=>{const r=gr[q.id];if(!r)return null;const p=r.m>0?r.s/r.m*100:0,col=p>=80?P.ok:p>=40?P.warn:P.err;return<div key={q.id} style={{...cardFlat,borderLeft:`4px solid ${col}`,animation:`fadeUp .2s ease ${i*.015}s both`}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}><span style={{fontWeight:800,fontSize:14}}>Q{i+1}</span><span style={bdg(qTC(q.type))}>{TL[q.type]}</span><span style={{fontSize:13,color:P.t3}}>{q.exam}</span>
+        <button onClick={()=>toggleBk(q.id)} style={{marginLeft:"auto",fontSize:16,color:bks.includes(q.id)?P.warn:P.t4}}>{bks.includes(q.id)?"★":"☆"}</button>
+        {isDrill?<span style={{fontWeight:800,fontSize:15,color:col}}>{p>=80?"✓":"✗"}</span>:<span style={{fontWeight:800,fontSize:16,color:col}}>{r.s}/{r.m}</span>}
+      </div>
+      <div style={{fontSize:14,marginTop:4,lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:50,overflow:"hidden",color:P.t2}}>{q.question}</div>
+      {r.fb?.map((f,fi)=><div key={fi} style={{fontSize:13,color:P.t3,padding:"3px 0"}}>{f}</div>)}
+      {r.rs?.map((st,si)=><div key={si} style={{fontSize:13,color:st.ok?P.ok:P.err,padding:"3px 0"}}>{st.ok?"✓":"✗"} {st.lb}{!st.ok&&st.ans&&" → "+st.ans}</div>)}
+      <details style={{marginTop:6}}><summary style={{fontSize:13,color:P.blue,fontWeight:600,cursor:"pointer"}}>해설</summary><div style={{fontSize:14,lineHeight:1.85,padding:"10px 14px",background:P.dim,borderRadius:10,marginTop:6,whiteSpace:"pre-wrap",color:P.t2}}>{q.explanation}</div></details>
+    </div>;})}</div>
+    <div style={{...section,display:"flex",gap:8,marginTop:16}}>
+      <button onClick={()=>setPg("home")} style={{...btn(P.blue,"#fff"),flex:1}}>홈으로</button>
+      <CoupangAd location="result"/>
+      <button onClick={()=>{const wq=sq.filter(q=>gr[q.id]&&gr[q.id].s<gr[q.id].m);if(!wq.length){alert("오답 없음!");return;}go(wq,"drill",sn+" 오답");}} style={{...btn(P.card,P.err,`1.5px solid ${P.err}`),flex:1}}>오답 다시 풀기</button>
+    </div>
+  </div>;
+  return null;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script></body></html>
