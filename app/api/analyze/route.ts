@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { fetchCase } from '../../../lib/crawler';
 import { analyzeCase } from '../../../lib/analyzer';
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   try {
     const { saYear, saSer, jiwonNm, region } = await req.json();
